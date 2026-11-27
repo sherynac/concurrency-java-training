@@ -9,22 +9,17 @@ import com.svi.advancedjavatraining.utils.PopulationFileWriter;
 import com.svi.advancedjavatraining.utils.WebLoader;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class Main {
 
-	public static void main(String[] args) {
+	static void main() {
 		long startTime = System.nanoTime();
 
 		//TODO START WORK AREA
-		try {
 
-			ExecutorService executor = Executors.newFixedThreadPool(2);
-
+		try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
 			WebLoader webLoader = new WebLoader();
 			double totalPopulation = 0;
 			PopulationFileWriter fileWriter = new PopulationFileWriter();
@@ -35,45 +30,50 @@ public class Main {
 			List<Province> provinceList = provinceFuture.get();
 			List<City> cityList = cityFuture.get();
 
+
 			Map<String, String> provinceKeyToName = new HashMap<>();
 			for (Province province : provinceList) {
 				provinceKeyToName.put(province.getKey(), province.getName());
 			}
 
-			Map<String, String> cityToProvinceMap = new HashMap<>();
+			List<Future<PopulationData>> futures = new ArrayList<>();
+
 
 			for (City city : cityList) {
 				String cityName = city.getName();
 				String provinceName = provinceKeyToName.get(city.getProvince());
 
-				cityToProvinceMap.put(cityName, provinceName);
+				futures.add(executor.submit( ()-> {
+					CityInfo data = new JSONFileReader(provinceName, cityName).getData();
 
-				JSONFileReader jsonFileReader = new JSONFileReader(provinceName, cityName);
-				CityInfo data = jsonFileReader.getData();
+					double population = Optional.ofNullable(data)
+							.map(CityInfo::getPopulation)
+							.map(Float::doubleValue)
+							.orElse(0.0);
 
-				float population = Optional.ofNullable(data)
-						.map(CityInfo::getPopulation)
-						.orElse(0.0f);
-
-				PopulationData populationData = new PopulationData(provinceName, cityName, population);
-				fileWriter.addPopulationRecord(populationData);
-
-				totalPopulation += population ;
+					return new PopulationData(provinceName, cityName, population);
+				}));
 			}
 
-			System.out.printf("Total population: %,.0f%n", totalPopulation);
+			for (Future<PopulationData> future : futures) {
+				PopulationData populationData = future.get();
+				fileWriter.addPopulationRecord(populationData);
+				totalPopulation += populationData.getPopulation();
+			}
 
-			executor.shutdown();
+			fileWriter.writeToFile();
+			System.out.printf("Total population: %,.0f%n", totalPopulation);
 
 		} catch (IOException io) {
 			System.out.println("Error has been encountered: " + io.getMessage());
 			System.exit(0);
-		} catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+		} catch (ExecutionException | InterruptedException e) {
+			System.out.println("Error in processing data" + e.getMessage());
+			System.exit(1);
         }
+
         // TODO END WORK AREA
+
 		long endTime = System.nanoTime();
 		long totalTime = endTime - startTime;
 		long millis = TimeUnit.NANOSECONDS.toMillis(totalTime);
