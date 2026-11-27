@@ -30,7 +30,6 @@ public class Main {
 			List<City> cityList = webLoader.getCities();
 
 
-
 			double totalPopulation = 0;
 			PopulationFileWriter fileWriter = new PopulationFileWriter();
 
