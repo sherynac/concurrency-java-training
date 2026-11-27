@@ -13,9 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class Main {
 
@@ -24,14 +22,18 @@ public class Main {
 
 		//TODO START WORK AREA
 		try {
+
+			ExecutorService executor = Executors.newFixedThreadPool(2);
+
 			WebLoader webLoader = new WebLoader();
-
-			List<Province> provinceList = webLoader.getProvinces();
-			List<City> cityList = webLoader.getCities();
-
-
 			double totalPopulation = 0;
 			PopulationFileWriter fileWriter = new PopulationFileWriter();
+
+			Future<List<Province>> provinceFuture = executor.submit(webLoader::getProvinces);
+			Future<List<City>> cityFuture = executor.submit(webLoader :: getCities);
+
+			List<Province> provinceList = provinceFuture.get();
+			List<City> cityList = cityFuture.get();
 
 			Map<String, String> provinceKeyToName = new HashMap<>();
 			for (Province province : provinceList) {
@@ -61,10 +63,16 @@ public class Main {
 
 			System.out.printf("Total population: %,.0f%n", totalPopulation);
 
+			executor.shutdown();
+
 		} catch (IOException io) {
 			System.out.println("Error has been encountered: " + io.getMessage());
 			System.exit(0);
-		}
+		} catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         // TODO END WORK AREA
 		long endTime = System.nanoTime();
 		long totalTime = endTime - startTime;
