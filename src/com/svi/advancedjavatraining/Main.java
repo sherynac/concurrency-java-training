@@ -64,8 +64,6 @@ public class Main {
 		} catch (IOException io) {
 			System.out.println("Error has been encountered: " + io.getMessage());
 			System.exit(0);
-		} catch (ExecutionException e) {
-			throw new RuntimeException(e);
 		}
         // TODO END WORK AREA
 		long endTime = System.nanoTime();
